@@ -71,11 +71,11 @@ NameOfTheParam:
 
 ```yaml
 NameOfTheParam:
- __range__:
-  from: start [Included]
-  to: end [Excluded]
-  [optional]
-  step: step
+  __range__:
+    from: start [Included]
+    to: end [Excluded]
+    [optional]
+    step: step
 ```
 
 ## Quick example
