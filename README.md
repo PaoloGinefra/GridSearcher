@@ -60,22 +60,22 @@ pip install git+https://github.com/PaoloGinefra/GridSearcher.git
 
 ```yaml
 NameOfTheParam:
-	__list__:
-		values:
-			- value1
-			- value2
-			- ...
+  __list__:
+    values:
+      - value1
+      - value2
+      - ...
 ```
 
 - `__range__`: Iterate over a given range of values. It expects a `from` and `to` parameters and optionally a `step` one.
 
 ```yaml
 NameOfTheParam:
-	__range__:
-		from: start [Included]
-		to: end [Excluded]
-		[optional]
-		step: step
+ __range__:
+  from: start [Included]
+  to: end [Excluded]
+  [optional]
+  step: step
 ```
 
 ## Quick example
