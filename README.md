@@ -58,7 +58,7 @@ pip install git+https://github.com/PaoloGinefra/GridSearcher.git
 
 - `__list__`: Iterate over its values, passed in the `values` parameter.
 
-```YAML
+```yaml
 NameOfTheParam:
 	__list__:
 		values:
@@ -69,7 +69,7 @@ NameOfTheParam:
 
 - `__range__`: Iterate over a given range of values. It expects a `from` and `to` parameters and optionally a `step` one.
 
-```YAML
+```yaml
 NameOfTheParam:
 	__range__:
 		from: start [Included]
