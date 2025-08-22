@@ -122,3 +122,22 @@ for i in alive_it(list(searcher)):
     time.sleep(0.5)
     print(i)
 ```
+
+## Logging
+
+GridSearcher optionally writes logs and the parsed grid configuration when a `GridSearcher` instance is created.
+
+- Where logs are created: the `loggingPath` parameter passed to `GridSearcher` (default `./`) is used as the base. Inside it the logger creates `GridSearcherLogs/<runName>/vN/` where `vN` is an incrementing version to avoid collisions.
+- Files created:
+  - `logs.txt` — a plain text file with DEBUG-level file logging.
+  - `grid_config.yaml` — a YAML dump of the original grid configuration saved at construction time.
+- Log format and handlers: the package uses Python's `logging` module. Console output is INFO-level, file output is DEBUG-level. The formatter is:
+
+```
+%(asctime)s | %(levelname)s | %(name)s | %(message)s
+```
+with timestamps formatted as `YYYY-MM-DD HH:MM:SS`.
+
+How to control logging:
+- Pass `loggingPath` to the `GridSearcher` constructor to change where logs are written, e.g. `GridSearcher(grid, loggingPath='my_logs')`.
+- If you need different logging behaviour (handlers, levels, rotation, etc.), get the `Logger` instance from the `GridSearcher` object (`searcher.logger`) and reconfigure it using the standard `logging` APIs.

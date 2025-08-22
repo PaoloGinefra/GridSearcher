@@ -35,4 +35,4 @@ print(len(searcher))
 
 for i in alive_it(list(searcher)):
     time.sleep(0.5)
-    print(i)
+    searcher.logger.logger.info(f"Current config: {i}")

@@ -6,6 +6,7 @@ from .ReservedKeys import ReservedKeys
 from copy import deepcopy
 import yaml
 from typing import List
+from .Logger import Logger
 
 
 class GridSearcher:
@@ -42,7 +43,7 @@ class GridSearcher:
     KEY_SEPARATOR = '|'
     # Separator used to encode nested keys into a single search-field key
 
-    def __init__(self, gridConfig: Dict):
+    def __init__(self, gridConfig: Dict, loggingPath: str = './'):
         """The constructor for the GridSearcher class. It parses the given grid configuration and prepares the search policy and base configuration.
 
         ## Args:
@@ -61,10 +62,17 @@ class GridSearcher:
         }
             ```
             You can also include fixed parameters that will not be changed during the search.
+
+            **loggingPath** (str): The directory where logs will be saved.
         """
         self.gridConfig = gridConfig
-        self.searchPolicy, self.baseConfig = self.parseConfig(gridConfig)
+        self.loggingPath = loggingPath
+        self.runName, self.searchPolicy, self.baseConfig = self.parseConfig(
+            gridConfig)
         self.currentConfig = deepcopy(self.baseConfig)
+
+        self.logger = Logger(self.runName, self.loggingPath)
+        self.logger.logGridConfig(self.gridConfig)
 
     def __iter__(self):
         return self
@@ -104,7 +112,7 @@ class GridSearcher:
             GridSearcher.__setFromKey(keyList[1:], target[keyList[0]], value)
 
     @staticmethod
-    def parseConfig(gridConfig: Dict) -> Tuple[SearchPolicy, Dict]:
+    def parseConfig(gridConfig: Dict) -> Tuple[str, SearchPolicy, Dict]:
         """Parse gridConfig into (searchPolicy, baseConfig).
 
         Expects `gridConfig` to contain exactly one top-level key (the run
@@ -113,7 +121,7 @@ class GridSearcher:
         `ProductSearchPolicy` from the discovered fields.
 
         Returns:
-            (SearchPolicy, Dict): policy to iterate combinations, and the base config.
+            (str, SearchPolicy, Dict): name of the run, policy to iterate combinations, and the base config.
         """
         assert len(gridConfig) == 1, (
             f"Grid configuration must contain exactly one key with the run name, got {list(gridConfig.keys())}"
@@ -130,7 +138,7 @@ class GridSearcher:
         GridSearcher.__recursiveParse(gridConfig, baseConfig, searchFields)
 
         searchPolicy = ProductSearchPolicy(searchFields)
-        return searchPolicy, baseConfig
+        return configName, searchPolicy, baseConfig
 
     @staticmethod
     def __recursiveParse(data: Dict, baseConfig: Dict, searchFields: List, currentKey: str = ''):
@@ -173,3 +181,8 @@ class GridSearcher:
         with open(path, 'r') as f:
             config = yaml.safe_load(f)
         return GridSearcher(config)
+
+    @staticmethod
+    def toYAML(config: dict, path: str = './'):
+        with open(path, 'w') as f:
+            yaml.dump(config, f)

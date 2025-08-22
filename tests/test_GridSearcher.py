@@ -2,7 +2,7 @@ from GridSearcher.GridSearcher import GridSearcher
 
 
 def test_GridSearcher_parseConfig_tupleHandledAsFixed_expectedBehavior():
-    sp, base = GridSearcher.parseConfig({'run1': {'a': (1, 2), 'b': [3]}})
+    _, sp, base = GridSearcher.parseConfig({'run1': {'a': (1, 2), 'b': [3]}})
     # Current implementation treats tuple and plain lists as fixed values
     assert 'a' in base
     assert base['a'] == (1, 2)
@@ -76,7 +76,7 @@ def test_path_collision_non_dict_intermediate_raises():
     # base has a non-dict at 'a' but a search field tries to set 'a|b' -> TypeError
     config = {'run1': {'a': 1, 'a': {'__list__': {'values': [1]}}}}
     # The above is ambiguous to write; construct via parseConfig components
-    sp, base = GridSearcher.parseConfig({'run1': {'a': 1}})
+    _, sp, base = GridSearcher.parseConfig({'run1': {'a': 1}})
     # Manually craft a searchPolicy that will attempt to set 'a|b'
     from GridSearcher.SearchField import SearchField
     sf = SearchField('a|b', [1])
