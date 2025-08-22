@@ -136,8 +136,10 @@ GridSearcher optionally writes logs and the parsed grid configuration when a `Gr
 ```
 %(asctime)s | %(levelname)s | %(name)s | %(message)s
 ```
+
 with timestamps formatted as `YYYY-MM-DD HH:MM:SS`.
 
 How to control logging:
+
 - Pass `loggingPath` to the `GridSearcher` constructor to change where logs are written, e.g. `GridSearcher(grid, loggingPath='my_logs')`.
 - If you need different logging behaviour (handlers, levels, rotation, etc.), get the `Logger` instance from the `GridSearcher` object (`searcher.logger`) and reconfigure it using the standard `logging` APIs.
