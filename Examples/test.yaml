@@ -1,0 +1,10 @@
+experiment:
+  yolo:
+    - Yes
+    - No
+    - maybe
+  r:
+    __range__:
+      from: 1
+      to: 10
+      step: 1

@@ -3,10 +3,30 @@ from alive_progress import alive_it
 import time
 
 gridConfig = {
-    'category': ['electronics', 'books', 'clothing'],
-    'price': range(1, 5),
-    'yolo': ['yes', 'no'],
-    'sus': True
+    'test': {
+        'category': ['electronics', 'books', 'clothing'],
+        'price': range(1, 5),
+        'yolo': ['yes', 'no'],
+        'sus': {
+            '__range__': {
+                'from': 1,
+                'to': 3,
+            }
+        },
+        'Listed': {
+            '__list__': {
+                'values': ['first', 'second']
+            }
+        },
+        'nested': {
+            'range': {
+                '__range__': {
+                    'from': 1,
+                    'to': 4,
+                }
+            }
+        }
+    }
 }
 searcher = GridSearcher(gridConfig)
 print(searcher)
