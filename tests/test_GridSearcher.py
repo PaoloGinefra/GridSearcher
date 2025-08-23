@@ -44,7 +44,7 @@ def test_parseConfig_requires_single_top_level_key():
     try:
         GridSearcher.parseConfig({'a': 1, 'b': 2})
         raised = False
-    except AssertionError:
+    except ValueError:
         raised = True
     assert raised
 

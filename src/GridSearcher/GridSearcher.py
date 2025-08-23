@@ -59,6 +59,7 @@ from .ReservedKeys import ReservedKeys
 from copy import deepcopy
 import yaml
 from .Logger import Logger
+import os
 
 
 class GridSearcher:
@@ -80,7 +81,7 @@ class GridSearcher:
                     'step': 0.01
                 }},
                 'batch': 32,
-                'model': {'layers': {'__list__': {'values': ['MLP', 'CNN]}}}
+                'model': {'layers': {'__list__': {'values': ['MLP', 'CNN']}}}
             }
         }
 
@@ -134,9 +135,10 @@ class GridSearcher:
         """Generate the next concrete configuration dictionary.
 
         The underlying search policy yields partial updates as mappings from
-        encoded keys (joined by `KEY_SEPARATOR`) to values. This method splits
-        those keys, applies updates to the mutable `currentConfig`, and
-        returns a deepcopy snapshot so callers receive an independent copy.
+        encoded keys (joined by the class constant `DICT_KEY_SEPARATOR` ("|"))
+        to values. This method splits those keys, applies updates to the
+        mutable `currentConfig`, and returns a deepcopy snapshot so callers
+        receive an independent copy.
         """
         try:
             update = next(self.searchPolicy)
@@ -237,8 +239,6 @@ class GridSearcher:
         # Populate searchFields and baseConfig by walking the nested dict
         GridSearcher.__recursiveParse(gridConfig, baseConfig, searchFields)
 
-        print(searchFields)
-
         searchPolicy = ProductSearchPolicy(searchFields)
         return configName, searchPolicy, baseConfig
 
@@ -310,9 +310,10 @@ class GridSearcher:
 
         If a dict value is recognized by `ReservedKeys.shouldBeParsed`, it is
         parsed with `ReservedKeys.parseDict` to produce an iterable of values
-        and converted into a `SearchField` whose key is `currentKey` +
-        `KEY_SEPARATOR` + `key` (when nested). Otherwise the dict is treated
-        as a nested fixed mapping and recursion continues.
+        and converted into a `SearchField` whose encoded key is formed by
+        joining `currentKey` and `key` with the class constant
+        `DICT_KEY_SEPARATOR` ("|"). Otherwise the dict is treated as a nested
+        fixed mapping and recursion continues.
         """
         for key, value in data.items():
             # Validate user key doesn't misuse reserved separators
@@ -344,8 +345,32 @@ class GridSearcher:
 
     @staticmethod
     def toYAML(config: dict, path: str = './'):
-        # Write the provided config to the given filepath.
+        """Write the provided config to a YAML file.
+
+        Behavior:
+        - If `path` is a directory (or ends with a path separator) the file
+          `grid_config.yaml` will be created inside that directory.
+        - If `path` is a file path, the config will be written to that file.
+        - Parent directories are created when they don't exist.
+
+        Args:
+            config: Mapping to serialize as YAML.
+            path: Destination file path or directory. Must be a non-empty string.
+        """
         if not path:
-            raise ValueError("toYAML requires a filepath to write to")
-        with open(path, 'w') as f:
-            yaml.dump(config, f)
+            raise ValueError(
+                "toYAML requires a non-empty filepath or directory path")
+
+        dest = path
+        # Treat explicit directory paths (existing or ending with separator)
+        if os.path.isdir(path) or path.endswith(os.sep) or path.endswith('/') or path.endswith('\\'):
+            os.makedirs(path, exist_ok=True)
+            dest = os.path.join(path, 'grid_config.yaml')
+        else:
+            parent = os.path.dirname(path)
+            if parent:
+                os.makedirs(parent, exist_ok=True)
+
+        # Use safe_dump and preserve key order where possible
+        with open(dest, 'w', encoding='utf-8') as f:
+            yaml.safe_dump(config, f, sort_keys=False)
