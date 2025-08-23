@@ -1,11 +1,63 @@
-from typing import Dict, Tuple, Any
+"""GridSearcher — quick overview for new contributors.
+
+This module implements a small grid-search engine that takes a single
+top-level run mapping and expands "reserved-key" descriptors into concrete
+configurations. Parsing separates fixed data (baseConfig) from varying
+parameters (SearchField objects) and produces a ProductSearchPolicy that
+yields the Cartesian product of all discovered iterables.
+
+Key points:
+- Input: a dict with exactly one top-level run name mapping to nested data.
+- Reserved descriptors: currently `__range__` and `__list__`; they are
+    recognized only when a dict has exactly one key equal to a reserved name.
+- Lists are parsed per element; each element may be fixed or a reserved
+    descriptor (or contain nested descriptors). List element positions are
+    preserved and emitted using internal tokens like `>0` when building keys.
+- SearchField keys are encoded using '|' between nested dict keys and
+    list-member tokens (`>N`) for indices. The ProductSearchPolicy combines
+    all SearchFields by Cartesian product. Iteration applies partial updates
+    (encoded_key -> value) to a mutable config via `__setFromKey` and
+    returns deep-copied concrete configs.
+
+Error modes: top-level must be one key; user-supplied keys cannot contain
+the internal separators ('|' or stray '>'). Malformed reserved descriptors
+raise from the ReservedKeys parsers.
+
+Example (how keys are encoded and placeholders used):
+
+    Input:
+        {
+            'run': {
+                'category': [
+                    {'__range__': {'from': 1, 'to': 3}},   # list element 0 is a range
+                    'books',                               # list element 1 fixed
+                    {'var': {'__list__': {'values': ['clothing','accessories']}}}  # element 2 has nested reserved
+                ]
+            }
+        }
+
+    After parsing:
+        baseConfig = {
+            'category': ['', 'books', {'var': ''}]
+        }
+
+        SearchFields (examples of encoded keys):
+            - 'category|>0'         -> iterable(range(1, 3))           # expands to 1,2
+            - 'category|>2|var'     -> ['clothing', 'accessories']
+
+    During iteration the ProductSearchPolicy will emit partial updates like
+    {'category|>0': 1, 'category|>2|var': 'clothing'} which are applied to
+    the baseConfig via the encoded keys to produce a concrete config.
+
+"""
+
+from typing import Dict, Tuple, Any, List
 from .SearchField import SearchField
 from .SearchPolicy import SearchPolicy
 from .ProductSearchPolicy import ProductSearchPolicy
 from .ReservedKeys import ReservedKeys
 from copy import deepcopy
 import yaml
-from typing import List
 from .Logger import Logger
 
 
@@ -105,41 +157,58 @@ class GridSearcher:
         Creates intermediate dicts when missing. If an intermediate path exists
         but is not a dict, a TypeError may occur when indexing into it.
         """
-        # Handle list targets safely: ensure the list is large enough,
-        # create a dict for the element if necessary, and recurse into it.
         if isinstance(target, list):
-            # Expect a list-key like '>0'
-            index = int(keyList[0][1:])
-            # Extend list if index out of range
-            if index >= len(target):
-                target.extend([None] * (index - len(target) + 1))
-
-            # If this is the final key for the list element, assign directly
-            if len(keyList) == 1:
-                target[index] = value
-                return
-
-            # Ensure the list element is a dict we can recurse into
-            if target[index] is None or not isinstance(target[index], (dict, list)):
-                # when next key is a list-key we need a list, else a dict
-                next_key = keyList[1]
-                if next_key and next_key[0] == GridSearcher.LIST_KEY_SEPARATOR:
-                    target[index] = []
-                else:
-                    target[index] = {}
-
-            # Recurse into the element
-            GridSearcher.__setFromKey(keyList[1:], target[index], value)
+            GridSearcher.__setFromListKey(keyList, target, value)
             return
-        elif len(keyList) == 1:
+
+        if len(keyList) == 1:
             target[keyList[0]] = value
-        else:
-            if keyList[0] not in target:
-                if keyList[0][0] == GridSearcher.LIST_KEY_SEPARATOR:
-                    target[keyList[0]] = []
-                else:
-                    target[keyList[0]] = {}
-            GridSearcher.__setFromKey(keyList[1:], target[keyList[0]], value)
+            return
+
+        GridSearcher.__setFromDictKey(keyList, target, value)
+
+    @staticmethod
+    def __setFromListKey(keyList: List[str], target: List, value: Any):
+        """Handle the case where the current target is a list:
+            - ensures the list is large enough for the index
+            - creates a dict or list for the element when recursing further
+            - assigns the value when at the final key
+        """
+        # Expect a list-key like '>0'
+        index = int(keyList[0][1:])
+        # Extend list if index out of range
+        if index >= len(target):
+            target.extend([None] * (index - len(target) + 1))
+
+        # If this is the final key for the list element, assign directly
+        if len(keyList) == 1:
+            target[index] = value
+            return
+
+        # Ensure the list element is a dict/list we can recurse into
+        if target[index] is None or not isinstance(target[index], (dict, list)):
+            # when next key is a list-key we need a list, else a dict
+            next_key = keyList[1]
+            if next_key and next_key[0] == GridSearcher.LIST_KEY_SEPARATOR:
+                target[index] = []
+            else:
+                target[index] = {}
+
+        # Recurse into the element
+        GridSearcher.__setFromKey(keyList[1:], target[index], value)
+
+    @staticmethod
+    def __setFromDictKey(keyList: List[str], target: Dict, value: Any):
+        """Handle the case where the current target is a dict.
+
+        Creates intermediate containers when missing (dict or list depending on token) and recurse.
+        """
+        if keyList[0] not in target:
+            if keyList[0][0] == GridSearcher.LIST_KEY_SEPARATOR:
+                target[keyList[0]] = []
+            else:
+                target[keyList[0]] = {}
+        GridSearcher.__setFromKey(keyList[1:], target[keyList[0]], value)
 
     @staticmethod
     def parseConfig(gridConfig: Dict) -> Tuple[str, SearchPolicy, Dict]:
@@ -153,9 +222,10 @@ class GridSearcher:
         Returns:
             (str, SearchPolicy, Dict): name of the run, policy to iterate combinations, and the base config.
         """
-        assert len(gridConfig) == 1, (
-            f"Grid configuration must contain exactly one key with the run name, got {list(gridConfig.keys())}"
-        )
+        if len(gridConfig) != 1:
+            raise ValueError(
+                f"Grid configuration must contain exactly one key with the run name, got {list(gridConfig.keys())}"
+            )
 
         # Extract the run-level mapping
         configName = list(gridConfig.keys())[0]

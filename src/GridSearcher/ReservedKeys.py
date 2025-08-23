@@ -25,17 +25,21 @@ def parseRange(data: Dict) -> Iterable:
 
     Raises AssertionError for malformed input.
     """
-    assert 2 <= len(
-        data) <= 3, f"Range must have 2 or 3 keys, got: {data.keys()}"
-    assert all(k in data for k in ['from', 'to']), (
-        f"Range must have 'from' and 'to' keys, got: {data.keys()}"
-    )
-    assert data['from'] < data['to'], (
-        f"'from' must be less than 'to', got: from={data['from']}, to={data['to']}"
-    )
-    if 'step' in data:
-        return range(data['from'], data['to'], data['step'])
-    return range(data['from'], data['to'])
+    if not (2 <= len(data) <= 3):
+        raise ValueError(
+            f"Range must have 2 or 3 keys, got: {list(data.keys())}")
+    if not all(k in data for k in ['from', 'to']):
+        raise ValueError(
+            f"Range must have 'from' and 'to' keys, got: {list(data.keys())}")
+    if data['from'] >= data['to']:
+        raise ValueError(
+            f"'from' must be less than 'to', got: from={data['from']}, to={data['to']}")
+    try:
+        if 'step' in data:
+            return range(data['from'], data['to'], data['step'])
+        return range(data['from'], data['to'])
+    except TypeError as e:
+        raise TypeError(f"Invalid type for range boundaries/step: {e}") from e
 
 
 def parseList(data: Dict) -> Iterable:
@@ -44,10 +48,12 @@ def parseList(data: Dict) -> Iterable:
     Expected shape: {'values': [...]}
     Raises AssertionError if 'values' is missing or not a list.
     """
-    assert 'values' in data, f"List must have 'values' key, got: {data.keys()}"
-    assert isinstance(data['values'], list), (
-        f"'values' must be a list, got: {type(data['values'])}"
-    )
+    if 'values' not in data:
+        raise ValueError(
+            f"List must have 'values' key, got: {list(data.keys())}")
+    if not isinstance(data['values'], list):
+        raise TypeError(
+            f"'values' must be a list, got: {type(data['values'])}")
     return data['values']
 
 
