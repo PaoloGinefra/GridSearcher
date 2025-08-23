@@ -192,6 +192,49 @@ class GridSearcher:
                     f"Key '{full}' contains reserved separator '{GridSearcher.LIST_KEY_SEPARATOR}'")
 
     @staticmethod
+    def __join_key(currentKey: str, key: str) -> str:
+        """Return the encoded nested key by joining currentKey and key using the dict separator."""
+        return (currentKey + GridSearcher.DICT_KEY_SEPARATOR + key) if currentKey else key
+
+    @staticmethod
+    def __list_member_key(idx: int) -> str:
+        """Return the internal list-member token (e.g. '>0')."""
+        return f"{GridSearcher.LIST_KEY_SEPARATOR}{idx}"
+
+    @staticmethod
+    def __make_search_field(newKey: str, iterable) -> SearchField:
+        """Create a SearchField from an encoded key and an iterable of values."""
+        return SearchField(newKey, iterable)
+
+    @staticmethod
+    def __parse_mapping(key: str, value: Dict, baseConfig: Dict, searchFields: List, currentKey: str):
+        """Handle a dict child: either a reserved-key SearchField or a nested mapping."""
+        newKey = GridSearcher.__join_key(currentKey, key)
+        if ReservedKeys.shouldBeParsed(value):
+            iterable = ReservedKeys.parseDict(value)
+            newSearchField = GridSearcher.__make_search_field(newKey, iterable)
+            searchFields.append(newSearchField)
+        else:
+            baseConfig[key] = {}
+            GridSearcher.__recursiveParse(
+                value, baseConfig[key], searchFields, newKey)
+
+    @staticmethod
+    def __parse_list(key: str, value: List, baseConfig: Dict, searchFields: List, currentKey: str):
+        """Handle a list child: recurse into each member and assemble the parsed list."""
+        newKey = GridSearcher.__join_key(currentKey, key)
+        listMembersDict = {}
+        for idx, item in enumerate(value):
+            itemKey = GridSearcher.__list_member_key(idx)
+            GridSearcher.__recursiveParse(
+                {itemKey: item}, listMembersDict, searchFields, newKey)
+        parsedList = [''] * len(value)
+        for k, v in listMembersDict.items():
+            index = int(k[1:])
+            parsedList[index] = v
+        baseConfig[key] = parsedList
+
+    @staticmethod
     def __recursiveParse(data: Dict, baseConfig: Dict, searchFields: List, currentKey: str = ''):
         """Recursively split `data` into `baseConfig` (fixed) and `searchFields` (varying).
 
@@ -205,31 +248,11 @@ class GridSearcher:
             # Validate user key doesn't misuse reserved separators
             GridSearcher.__validate_user_key(key, currentKey)
             if isinstance(value, dict):
-                newKey = currentKey + GridSearcher.DICT_KEY_SEPARATOR if currentKey else ''
-                newKey += key
-
-                if ReservedKeys.shouldBeParsed(value):
-                    iterable = ReservedKeys.parseDict(value)
-                    newSearchField = SearchField(newKey, iterable)
-                    searchFields.append(newSearchField)
-                else:
-                    baseConfig[key] = {}
-                    GridSearcher.__recursiveParse(
-                        value, baseConfig[key], searchFields, newKey)
+                GridSearcher.__parse_mapping(
+                    key, value, baseConfig, searchFields, currentKey)
             elif isinstance(value, list):
-                newKey = currentKey + \
-                    GridSearcher.DICT_KEY_SEPARATOR if currentKey else ''
-                newKey += key
-                listMembersDict = {}
-                for idx, item in enumerate(value):
-                    itemKey = f"{GridSearcher.LIST_KEY_SEPARATOR}{idx}"
-                    GridSearcher.__recursiveParse(
-                        {itemKey: item}, listMembersDict, searchFields, newKey)
-                parsedList = [''] * len(value)
-                for k, v in listMembersDict.items():
-                    index = int(k[1:])
-                    parsedList[index] = v
-                baseConfig[key] = parsedList
+                GridSearcher.__parse_list(
+                    key, value, baseConfig, searchFields, currentKey)
             else:
                 baseConfig[key] = value
 
