@@ -173,6 +173,25 @@ class GridSearcher:
         return configName, searchPolicy, baseConfig
 
     @staticmethod
+    def __validate_user_key(key: str, currentKey: str = ''):
+        """Validate that a user-provided key does not contain reserved separators.
+
+        Internal list-member tokens like '>0' (used by the parser) are allowed
+        when generated internally but are rejected when present in user keys.
+        """
+        if GridSearcher.DICT_KEY_SEPARATOR in key:
+            full = (currentKey + GridSearcher.DICT_KEY_SEPARATOR +
+                    key) if currentKey else key
+            raise ValueError(
+                f"Key '{full}' contains reserved separator '{GridSearcher.DICT_KEY_SEPARATOR}'")
+        if GridSearcher.LIST_KEY_SEPARATOR in key:
+            if not (key.startswith(GridSearcher.LIST_KEY_SEPARATOR) and key[1:].isdigit()):
+                full = (currentKey + GridSearcher.DICT_KEY_SEPARATOR +
+                        key) if currentKey else key
+                raise ValueError(
+                    f"Key '{full}' contains reserved separator '{GridSearcher.LIST_KEY_SEPARATOR}'")
+
+    @staticmethod
     def __recursiveParse(data: Dict, baseConfig: Dict, searchFields: List, currentKey: str = ''):
         """Recursively split `data` into `baseConfig` (fixed) and `searchFields` (varying).
 
@@ -183,6 +202,8 @@ class GridSearcher:
         as a nested fixed mapping and recursion continues.
         """
         for key, value in data.items():
+            # Validate user key doesn't misuse reserved separators
+            GridSearcher.__validate_user_key(key, currentKey)
             if isinstance(value, dict):
                 newKey = currentKey + GridSearcher.DICT_KEY_SEPARATOR if currentKey else ''
                 newKey += key
