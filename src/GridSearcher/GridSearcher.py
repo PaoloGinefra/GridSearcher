@@ -40,7 +40,8 @@ class GridSearcher:
             train(config)
     """
 
-    KEY_SEPARATOR = '|'
+    DICT_KEY_SEPARATOR = '|'
+    LIST_KEY_SEPARATOR = '>'
     # Separator used to encode nested keys into a single search-field key
 
     def __init__(self, gridConfig: Dict, loggingPath: str = './'):
@@ -89,7 +90,7 @@ class GridSearcher:
             update = next(self.searchPolicy)
             # Apply each partial update (encoded_key -> value) to currentConfig
             for key, value in update.items():
-                keyList = key.split(self.KEY_SEPARATOR)
+                keyList = key.split(self.DICT_KEY_SEPARATOR)
                 GridSearcher.__setFromKey(keyList, self.currentConfig, value)
 
             # Return a defensive deepcopy snapshot for the caller
@@ -98,17 +99,46 @@ class GridSearcher:
             raise StopIteration
 
     @staticmethod
-    def __setFromKey(keyList: List[str], target: Dict, value: Any):
+    def __setFromKey(keyList: List[str], target: Dict | List, value: Any):
         """Recursive helper to set a value into a nested dict by key path.
 
         Creates intermediate dicts when missing. If an intermediate path exists
         but is not a dict, a TypeError may occur when indexing into it.
         """
-        if len(keyList) == 1:
+        # Handle list targets safely: ensure the list is large enough,
+        # create a dict for the element if necessary, and recurse into it.
+        if isinstance(target, list):
+            # Expect a list-key like '>0'
+            index = int(keyList[0][1:])
+            # Extend list if index out of range
+            if index >= len(target):
+                target.extend([None] * (index - len(target) + 1))
+
+            # If this is the final key for the list element, assign directly
+            if len(keyList) == 1:
+                target[index] = value
+                return
+
+            # Ensure the list element is a dict we can recurse into
+            if target[index] is None or not isinstance(target[index], (dict, list)):
+                # when next key is a list-key we need a list, else a dict
+                next_key = keyList[1]
+                if next_key and next_key[0] == GridSearcher.LIST_KEY_SEPARATOR:
+                    target[index] = []
+                else:
+                    target[index] = {}
+
+            # Recurse into the element
+            GridSearcher.__setFromKey(keyList[1:], target[index], value)
+            return
+        elif len(keyList) == 1:
             target[keyList[0]] = value
         else:
             if keyList[0] not in target:
-                target[keyList[0]] = {}
+                if keyList[0][0] == GridSearcher.LIST_KEY_SEPARATOR:
+                    target[keyList[0]] = []
+                else:
+                    target[keyList[0]] = {}
             GridSearcher.__setFromKey(keyList[1:], target[keyList[0]], value)
 
     @staticmethod
@@ -137,6 +167,8 @@ class GridSearcher:
         # Populate searchFields and baseConfig by walking the nested dict
         GridSearcher.__recursiveParse(gridConfig, baseConfig, searchFields)
 
+        print(searchFields)
+
         searchPolicy = ProductSearchPolicy(searchFields)
         return configName, searchPolicy, baseConfig
 
@@ -152,7 +184,7 @@ class GridSearcher:
         """
         for key, value in data.items():
             if isinstance(value, dict):
-                newKey = currentKey + GridSearcher.KEY_SEPARATOR if currentKey else ''
+                newKey = currentKey + GridSearcher.DICT_KEY_SEPARATOR if currentKey else ''
                 newKey += key
 
                 if ReservedKeys.shouldBeParsed(value):
@@ -163,6 +195,20 @@ class GridSearcher:
                     baseConfig[key] = {}
                     GridSearcher.__recursiveParse(
                         value, baseConfig[key], searchFields, newKey)
+            elif isinstance(value, list):
+                newKey = currentKey + \
+                    GridSearcher.DICT_KEY_SEPARATOR if currentKey else ''
+                newKey += key
+                listMembersDict = {}
+                for idx, item in enumerate(value):
+                    itemKey = f"{GridSearcher.LIST_KEY_SEPARATOR}{idx}"
+                    GridSearcher.__recursiveParse(
+                        {itemKey: item}, listMembersDict, searchFields, newKey)
+                parsedList = [''] * len(value)
+                for k, v in listMembersDict.items():
+                    index = int(k[1:])
+                    parsedList[index] = v
+                baseConfig[key] = parsedList
             else:
                 baseConfig[key] = value
 
@@ -184,5 +230,8 @@ class GridSearcher:
 
     @staticmethod
     def toYAML(config: dict, path: str = './'):
+        # Write the provided config to the given filepath.
+        if not path:
+            raise ValueError("toYAML requires a filepath to write to")
         with open(path, 'w') as f:
             yaml.dump(config, f)
