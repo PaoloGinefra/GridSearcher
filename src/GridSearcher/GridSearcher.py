@@ -51,7 +51,7 @@ Example (how keys are encoded and placeholders used):
 
 """
 
-from typing import Dict, Tuple, Any, List
+from typing import Dict, Tuple, Any, List, Union
 from .SearchField import SearchField
 from .SearchPolicy import SearchPolicy
 from .ProductSearchPolicy import ProductSearchPolicy
@@ -153,7 +153,7 @@ class GridSearcher:
             raise StopIteration
 
     @staticmethod
-    def __setFromKey(keyList: List[str], target: Dict | List, value: Any):
+    def __setFromKey(keyList: List[str], target: Union[Dict, List], value: Any):
         """Recursive helper to set a value into a nested dict by key path.
 
         Creates intermediate dicts when missing. If an intermediate path exists
